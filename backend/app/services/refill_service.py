@@ -37,18 +37,17 @@ def sync_latest_order(db: Session, location_id: int) -> RefillOrder:
     只动最新单，历史非最新单一律不回刷。
     """
     summary = compute_summary(db, location_id)
-    orders = db.scalars(
+    latest = db.scalars(
         select(RefillOrder).where(RefillOrder.location_id == location_id)
         .order_by(RefillOrder.id.desc())
-    ).all()
-    if not orders:
-        order = RefillOrder(location_id=location_id, created_at=datetime.utcnow())
-        db.add(order)
+    ).first()
+    if latest is None:
+        latest = RefillOrder(location_id=location_id, created_at=datetime.utcnow())
+        db.add(latest)
         db.flush()
-        orders = [order]
-    for order in orders:
-        order.lines_json = json.dumps(summary, ensure_ascii=False)
-    return orders[0]
+    # 只回写最新一张；历史单据保持生成当时的字，绝不随当前货道现态回刷。
+    latest.lines_json = json.dumps(summary, ensure_ascii=False)
+    return latest
 
 
 def order_payload(order: RefillOrder, location_id: int) -> dict:

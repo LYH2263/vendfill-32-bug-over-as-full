@@ -33,7 +33,7 @@ def compute_gap(capacity: int, stock: int, in_transit: int) -> int:
 def lane_status(gap: int) -> str:
     """同一跳变口径：超占与满仓互斥，超占只由 gap<0 表达。"""
     if gap < 0:
-        return STATUS_FULL
+        return STATUS_OVERBOOKED
     if gap == 0:
         return STATUS_FULL
     return STATUS_NEED_FILL

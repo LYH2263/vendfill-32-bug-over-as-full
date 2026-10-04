@@ -3,12 +3,10 @@ import { onMounted, ref } from 'vue'
 import { api } from '../api'
 const lanes = ref<any[]>([])
 onMounted(async () => {
-  const ticket = await api('/refills/latest?location_id=1')
+  // 名单口径以后端 /refills/full 为唯一来源：只收 status === 'full'，
+  // 绝不在前端再把所有“补量为 0”的行（含超占）并进来。
   const body = await api('/refills/full?location_id=1')
-  const extra = (ticket.lines || []).filter((l: any) => Number(l.fill_qty) === 0)
-  const map = new Map((body.lanes || []).map((l: any) => [l.lane_id, l]))
-  for (const l of extra) map.set(l.lane_id, l)
-  lanes.value = Array.from(map.values())
+  lanes.value = body.lanes || []
 })
 </script>
 <template>
