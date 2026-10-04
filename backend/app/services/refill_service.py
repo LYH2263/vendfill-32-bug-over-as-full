@@ -46,9 +46,10 @@ def sync_latest_order(db: Session, location_id: int) -> RefillOrder:
         db.add(order)
         db.flush()
         orders = [order]
-    for order in orders:
-        order.lines_json = json.dumps(summary, ensure_ascii=False)
-    return orders[0]
+    # 只回写最新一张：历史单据保持生成当时的字，绝不随当前货道现态回刷。
+    order = orders[0]
+    order.lines_json = json.dumps(summary, ensure_ascii=False)
+    return order
 
 
 def order_payload(order: RefillOrder, location_id: int) -> dict:

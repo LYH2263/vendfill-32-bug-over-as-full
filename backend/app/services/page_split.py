@@ -1,4 +1,11 @@
-"""Ticket vs page numbers are produced on different paths."""
+"""小票 / 满仓名单 / 汇总的展示口径。
+
+唯一事实源是单据快照里每行的 fill_engine 状态（need_fill/full/overbooked），
+各页只能照快照归类，不得自行按 gap/fill_qty 另算：
+  - 小票行：快照写的是什么就是什么（历史单保持生成当时的字）；
+  - 满仓名单：只收 status == full；超占与满仓互斥，绝不混入；
+  - 汇总：超占、满仓两个计数分开统计，不得捏成一个数。
+"""
 from __future__ import annotations
 
 
@@ -17,47 +24,20 @@ def present_ticket(payload: dict) -> dict:
 
 def present_summary(location_id: int, payload: dict) -> dict:
     lines = _lines(payload)
-    gap_sum = 0
-    zero_fill = 0
-    for l in lines:
-        g = int(l.get("gap") or 0)
-        f = int(l.get("fill_qty") or 0)
-        if g > 0:
-            gap_sum += g
-        else:
-            gap_sum += max(f, 0)
-        if f == 0:
-            zero_fill += 1
     return {
         "location_id": location_id,
         "order_id": payload.get("id"),
-        "status": payload.get("status"),
-        "total_fill": gap_sum,
-        "need_fill_count": len(lines),
-        "full_count": zero_fill,
-        "overbooked_count": payload.get("overbooked_count", 0),
-        "blocked_count": payload.get("blocked_count", 0),
-        "capped_count": payload.get("capped_count", 0),
-        "sku_cap_full_count": payload.get("sku_cap_full_count", 0),
-        "max_fill_qty": 0,
-        "fill_open": payload.get("fill_open"),
-        "fill_start_minute": payload.get("fill_start_minute"),
-        "fill_end_minute": payload.get("fill_end_minute"),
+        "total_fill": sum(int(l.get("fill_qty") or 0) for l in lines),
+        "need_fill_count": sum(1 for l in lines if str(l.get("status") or "") == "need_fill"),
+        "full_count": sum(1 for l in lines if str(l.get("status") or "") == "full"),
+        "overbooked_count": sum(1 for l in lines if str(l.get("status") or "") == "overbooked"),
     }
 
 
 def present_full(location_id: int, payload: dict) -> dict:
     lines = _lines(payload)
-    lanes = []
-    for l in lines:
-        status = str(l.get("status") or "")
-        fill = int(l.get("fill_qty") or 0)
-        code = str(l.get("reject_code") or l.get("reason") or "")
-        if fill == 0 or status in ("full", "blocked", "capped", "sku_cap_full", "overbooked"):
-            lanes.append(l)
-            continue
-        if "满" in code or "封锁" in code or "超占" in code:
-            lanes.append(l)
+    # 满仓名单只列满仓：超占（gap < 0）与满仓互斥，绝不靠“补量为 0”混入。
+    lanes = [l for l in lines if str(l.get("status") or "") == "full"]
     return {"location_id": location_id, "lanes": lanes}
 
 
